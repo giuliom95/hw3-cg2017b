@@ -26,8 +26,15 @@ struct point {
 
 /// Sample the camera for pixel i, j with image resolution res.
 ray3f sample_camera(const camera* cam, int i, int j, int res, rng_t& rng) {
-    // YOURN CODE GOES HERE
-    return {};
+	const auto h = res;
+	const auto w = res * cam->aspect;
+	const auto u = (i + next_rand1f(rng)) / w;
+	const auto v = (j + next_rand1f(rng)) / h;
+
+	const auto ql = vec3f{(u-0.5f)*w, (v-0.5f)*h, -1};
+	const auto ol = vec3f{0, 0, 0};
+	return {transform_point(cam->frame, ol),
+		transform_direction(cam->frame, normalize(-ql - ol))};
 }
 
 /// Evaluate the point proerties for a shape.
