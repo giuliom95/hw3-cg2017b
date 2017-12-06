@@ -16575,7 +16575,7 @@ inline vector<obj_material*> load_mtl(
     // read the file line by line
     char linebuf[4096];
     auto linenum = 0;
-    while (fs.getline(linebuf, 4096)) {
+    while(!fs.eof() && fs.getline(linebuf, 4096)) {
         // prepare to parse
         linenum += 1;
         auto ss = stringstream(linebuf);

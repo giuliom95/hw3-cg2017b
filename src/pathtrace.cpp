@@ -133,12 +133,32 @@ point intersect(
 	return {};
 }
 
+vec3f sample_hemisphere(const point& pt, rng_t& rng) {
+	const auto frame = make_frame3_fromz(pt.x, pt.n);
+
+	const auto r2 = next_rand1f(rng);
+	const auto a = 2*pi*next_rand1f(rng);
+	const auto b = sqrt(1-r2);
+
+	return (float)(b*cos(a))*frame.x + (float)(b*sin(a))*frame.y + r2*frame.z;
+}
+
+
 /// Naive pathtracing called recurively. Hint: call reculsively with bounces-1.
 /// In this method, use hemispherical cosine sampling and only lambert BSDF.
 vec3f estimate_li_naive(
-    const scene* scn, const vec3f& q, const vec3f& d, int bounces, rng_t& rng) {
-    // YOURN CODE GOES HERE
-    return {};
+	const scene* scn, const vec3f& q, const vec3f& d, int bounces, rng_t& rng) {
+
+	auto pt = intersect(scn, q, d);
+	if(bounces == 0) return pt.le;
+
+	if(!pt.hit()) return pt.le;
+
+	auto i = sample_hemisphere(pt, rng);
+	auto li = estimate_li_naive(scn, pt.x, i, bounces-1, rng);
+	// Cosine term is elided?
+	auto lr = li * pt.kd * (float)pi;
+	return pt.le + lr;
 }
 
 /// Produce formulation of pathtracing that matches exactly eh above.
