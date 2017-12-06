@@ -24,6 +24,47 @@ struct point {
     }
 };
 
+inline vec4f lookup_texture(
+	const texture* txt, const vec2i& ij, bool srgb = true) {
+
+	if (txt->ldr) {
+		auto v = txt->ldr[ij];
+		return (srgb) ? srgb_to_linear(v) : byte_to_float(v);
+	} else if (txt->hdr) {
+		return txt->hdr[ij];
+	} else {
+		assert(false);
+		return {};
+	}
+}
+
+
+vec4f eval_texture(
+	const texture* txt, const vec2f& texcoord, bool srgb = true) {
+
+	if (!txt) return {1, 1, 1, 1};
+	auto wh = vec2i{txt->width(), txt->height()};
+
+	auto st = vec2f{
+		fmod(texcoord.x, 1.0f) * wh.x, fmod(texcoord.y, 1.0f) * wh.y};
+	if (st.x < 0) st.x += wh.x;
+	if (st.y < 0) st.y += wh.y;
+
+	auto ij = clamp(vec2i{(int)st.x, (int)st.y}, {0, 0}, wh);
+	auto uv = st - vec2f{(float)ij.x, (float)ij.y};
+
+	vec2i idx[4] = {ij, {ij.x, (ij.y + 1) % wh.y},
+		{(ij.x + 1) % wh.x, ij.y}, {(ij.x + 1) % wh.x, (ij.y + 1) % wh.y}};
+	auto w = vec4f{(1 - uv.x) * (1 - uv.y), (1 - uv.x) * uv.y,
+		uv.x * (1 - uv.y), uv.x * uv.y};
+
+	// handle interpolation
+	return (lookup_texture(txt, idx[0], srgb) * w.x +
+			lookup_texture(txt, idx[1], srgb) * w.y +
+			lookup_texture(txt, idx[2], srgb) * w.z +
+			lookup_texture(txt, idx[3], srgb) * w.w);
+}
+
 /// Sample the camera for pixel i, j with image resolution res.
 ray3f sample_camera(const camera* cam, int i, int j, int res, rng_t& rng) {
 	const auto h = res;
@@ -37,27 +78,62 @@ ray3f sample_camera(const camera* cam, int i, int j, int res, rng_t& rng) {
 		transform_direction(cam->frame, normalize(-ql - ol))};
 }
 
-/// Evaluate the point proerties for a shape.
+/// Evaluate the point properties for a shape.
 point eval_point(const instance* ist, int ei, const vec4f& ew, const vec3f& o) {
-    // YOURN CODE GOES HERE
-    return {};
+	point p;
+	p.o = o;
+
+	const auto shp = ist->shp;
+	const auto tri = shp->triangles[ei];
+	p.x = ew.x*shp->pos[tri.x]	+ ew.y*shp->pos[tri.y]	+ ew.z*shp->pos[tri.z];
+	p.n = ew.x*shp->norm[tri.x]	+ ew.y*shp->norm[tri.y]	+ ew.z*shp->norm[tri.z];
+
+	const auto uv = ew.x*shp->texcoord[tri.x] +
+					ew.y*shp->texcoord[tri.y] +
+					ew.z*shp->texcoord[tri.z];
+
+	p.kd = shp->mat->kd * eval_texture(shp->mat->kd_txt.txt, uv).xyz();
+
+	return p;
 }
 
-/// Evaluate the point proerties for an environment (only o and le).
+/// Evaluate the point properties for an environment (only o and le).
 point eval_point(const environment* env, const vec3f& o) {
-    // YOURN CODE GOES HERE
-    return {};
+
+	//Using LatLong parametrization (slide 110)
+	point p;
+	const vec2f uv{
+		static_cast<float>(atan2(o.z, o.x)/(2*pi)),
+		static_cast<float>(acos(o.y)/pi)
+	};
+	p.le = env->ke * eval_texture(env->ke_txt.txt, uv).xyz();
+	return p;
 }
 
 /// Intersection the scene and return a point. Support both shape and
 /// environments.
 point intersect(
-    const scene* scn, const vec3f& q, const vec3f& i, float tmax = flt_max) {
-    // YOURN CODE GOES HERE
-    return {};
+	const scene* scn, const vec3f& q, const vec3f& i, float tmax = flt_max) {
+
+	float t;
+	int iid, eid;
+	vec4f euv;
+
+	const ray3f r{q,i,0,tmax};
+
+	if(!intersect_ray(scn, r, false, t, iid, eid, euv)) {
+		if(!scn->environments.empty()) {
+			return eval_point(scn->environments.front(), -i);
+		}
+	} else {
+		const auto ist = scn->instances[iid];
+		return eval_point(ist, eid, euv, -i);
+	}
+
+	return {};
 }
 
-/// Naive pathtracing called recurively. Hint: call reculsively with boucnes-1.
+/// Naive pathtracing called recurively. Hint: call reculsively with bounces-1.
 /// In this method, use hemispherical cosine sampling and only lambert BSDF.
 vec3f estimate_li_naive(
     const scene* scn, const vec3f& q, const vec3f& d, int bounces, rng_t& rng) {
