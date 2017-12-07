@@ -16567,7 +16567,7 @@ inline vector<obj_material*> load_mtl(
     // open file
     auto fs = fstream(filename, ios_base::in);
     if (!fs) throw runtime_error("cannot open filename " + filename);
-    fs.exceptions(ios_base::failbit);
+    //fs.exceptions(ios_base::failbit);
 
     // add a material preemptively to avoid crashes
     materials.push_back(new obj_material());
@@ -16720,7 +16720,7 @@ inline obj_scene* load_obj(const string& filename, bool load_txt,
     // open file
     auto fs = fstream(filename, ios_base::in);
     if (!fs) throw runtime_error("cannot open filename " + filename);
-    fs.exceptions(ios_base::failbit);
+    //fs.exceptions(ios_base::failbit);
 
     // initializing obj
     asset->objects.push_back(new obj_object());
@@ -16737,7 +16737,7 @@ inline obj_scene* load_obj(const string& filename, bool load_txt,
     // read the file line by line
     char linebuf[4096];
     auto linenum = 0;
-    while (fs.getline(linebuf, 4096)) {
+    while (!fs.eof() && fs.getline(linebuf, 4096)) {
         // prepare to parse
         linenum += 1;
         auto ss = stringstream(linebuf);
