@@ -67,20 +67,23 @@ vec4f eval_texture(
 
 /// Sample the camera for pixel i, j with image resolution res.
 ray3f sample_camera(const camera* cam, int i, int j, int res, rng_t& rng) {
-	const auto h = res;
-	const auto w = res * cam->aspect;
-	const auto u = (i + next_rand1f(rng)) / w;
-	const auto v = (j + next_rand1f(rng)) / h;
+	const auto sh = res;
+	const auto sw = res * cam->aspect;
+	const auto u = (i + next_rand1f(rng)) / sw;
+	const auto v = (j + next_rand1f(rng)) / sh;
+	const auto h = 2 * std::tan(cam->yfov / 2);
+    const auto w = h * cam->aspect;
 
-	const auto ql = vec3f{(u-0.5f)*w, (v-0.5f)*h, -1};
+	const auto ql = vec3f{-(u-0.5f)*w, (v-0.5f)*h, 1};
 	const auto ol = vec3f{0, 0, 0};
 	return {transform_point(cam->frame, ol),
-		transform_direction(cam->frame, normalize(-ql - ol))};
+		transform_direction(cam->frame, normalize(ol-ql))};
 }
 
 /// Evaluate the point properties for a shape.
 point eval_point(const instance* ist, int ei, const vec4f& ew, const vec3f& o) {
 	point p;
+	p.ist = ist;
 	p.o = o;
 
 	const auto shp = ist->shp;
@@ -93,6 +96,7 @@ point eval_point(const instance* ist, int ei, const vec4f& ew, const vec3f& o) {
 					ew.z*shp->texcoord[tri.z];
 
 	p.kd = shp->mat->kd * eval_texture(shp->mat->kd_txt.txt, uv).xyz();
+	p.le = shp->mat->ke;
 
 	return p;
 }
@@ -137,10 +141,12 @@ vec3f sample_hemisphere(const point& pt, rng_t& rng) {
 	const auto frame = make_frame3_fromz(pt.x, pt.n);
 
 	const auto r2 = next_rand1f(rng);
-	const auto a = 2*pi*next_rand1f(rng);
+	const auto a = 2*pif*next_rand1f(rng);
 	const auto b = sqrt(1-r2);
 
-	return (float)(b*cos(a))*frame.x + (float)(b*sin(a))*frame.y + r2*frame.z;
+	const auto o = normalize(vec3f((float)(b*cos(a)), (float)(b*sin(a)), r2));
+
+	return abs(dot(pt.n, o)) * transform_direction(frame, o);
 }
 
 
