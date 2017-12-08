@@ -146,7 +146,7 @@ vec3f sample_hemisphere(const point& pt, rng_t& rng) {
 
 	const auto o = normalize(vec3f((float)(b*cos(a)), (float)(b*sin(a)), r2));
 
-	return abs(dot(pt.n, o)) * transform_direction(frame, o);
+	return transform_direction(frame, o);
 }
 
 
@@ -161,9 +161,9 @@ vec3f estimate_li_naive(
 	if(!pt.hit()) return pt.le;
 
 	auto i = sample_hemisphere(pt, rng);
-	auto li = estimate_li_naive(scn, pt.x, i, bounces-1, rng);
+	auto li = estimate_li_naive(scn, pt.x+ray_eps*i, i, bounces-1, rng);
 	// Cosine term is elided?
-	auto lr = li * pt.kd * (float)pi;
+	auto lr = li * pt.kd;
 	return pt.le + lr;
 }
 
