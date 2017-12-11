@@ -144,7 +144,7 @@ vec3f sample_hemisphere(const point& pt, rng_t& rng) {
 	const auto a = 2*pif*next_rand1f(rng);
 	const auto b = sqrt(1-r2);
 
-	const auto o = normalize(vec3f((float)(b*cos(a)), (float)(b*sin(a)), r2));
+	const auto o = vec3f((float)(b*cos(a)), (float)(b*sin(a)), r2);
 
 	return transform_direction(frame, o);
 }
@@ -156,23 +156,48 @@ vec3f estimate_li_naive(
 	const scene* scn, const vec3f& q, const vec3f& d, int bounces, rng_t& rng) {
 
 	auto pt = intersect(scn, q, d);
+	if(pt.emission_only()) return pt.le;
+
 	if(bounces == 0) return pt.le;
 
-	if(!pt.hit()) return pt.le;
-
 	auto i = sample_hemisphere(pt, rng);
+	auto pdf = dot(pt.n, i) / pif;
+	auto pr = min(1.0f, dot(pt.n, i)/pdf);
+	if(next_rand1f(rng) > pr) return pt.le;
+
 	auto li = estimate_li_naive(scn, pt.x+ray_eps*i, i, bounces-1, rng);
-	// Cosine term is elided?
-	auto lr = li * pt.kd;
+
+	auto lr = li * pt.kd * dot(pt.n, i) / (pr*pdf);
 	return pt.le + lr;
 }
+
 
 /// Produce formulation of pathtracing that matches exactly eh above.
 /// In this method, use hemispherical cosine sampling and only lambert BSDF.
 vec3f estimate_li_product(
-    const scene* scn, const vec3f& q, const vec3f& d, int bounces, rng_t& rng) {
-    // YOURN CODE GOES HERE
-    return {};
+	//DOES NOT WORK
+	const scene* scn, const vec3f& q, const vec3f& d, int bounces, rng_t& rng) {
+
+	auto pt = intersect(scn, q, d);
+	auto li = pt.le;
+	auto w = vec3f(1,1,1);
+
+	for(auto bounce = 0; bounce < bounces; ++bounce) {
+		if(pt.emission_only()) break;
+
+		auto i =  sample_hemisphere(pt, rng);
+		auto pdf = dot(pt.n, i) / pif;
+		auto pr = min(1.0f, abs(dot(pt.n, i))/pdf);
+		if(next_rand1f(rng) > pr) break;
+
+		auto bpt = intersect(scn, pt.x+ray_eps*i, i);
+		w *= pt.kd;
+		li += w * bpt.le;
+
+		pt = bpt;
+	}
+
+	return li;
 }
 
 /// Initialize the lights vector and compute the shape distribution with
